@@ -1,13 +1,13 @@
 import datasets
 import keras_tuner as kt
-import tensorflow as tf
+import tensorflow
 from datasets import load_dataset
 from tensorflow import keras
 
 number_of_styles = 27
 # write convolutional neural network model to classify styles of art
 def build_model(hp, num_classes = number_of_styles, conv_activation = 'relu'):
-    units = hp.Int('units', min_value = 32, max_value = 512, step = 32)
+    units = hp.Int('units', min_value = 32, max_value = 256, step = 16)
     
     model = keras.models.Sequential([
         keras.layers.Conv2D(64, (3, 3), activation = conv_activation, input_shape=(32, 32, 1)), # convolutional layer
@@ -43,7 +43,7 @@ tuner.search(dataset["train"].features["image"],
 optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
 optimal_unit = optimal_hyperparams.get('units')
 optimal_learning_rate = optimal_hyperparams.get('learning_rate')
-print("Optimal parameters: optimal unit = {optimal_unit}, optimal learning rate = {optimal_learning_rate}")
+print("The optimal parameters: optimal unit = {optimal_unit}, optimal learning rate = {optimal_learning_rate}")
 new_model = tuner.hypermodel.build(optimal_hyperparams)
 
 history = new_model.fit(dataset["train"].features["image"],
@@ -53,5 +53,5 @@ history = new_model.fit(dataset["train"].features["image"],
 print("Validation accuracy for each of the 10 epochs:")
 print(history.history['val_accuracy'])
 
-# loss_value, accuracy = model.evaluate(dataset["test"].features["image"], dataset["test"].features["style"])
-# print("Loss: {loss_value}. Accuracy: {accuracy}")
+# loss, accuracy = model.evaluate(dataset["test"].features["image"], dataset["test"].features["style"])
+# print("Loss: {loss}. Accuracy: {accuracy}")
