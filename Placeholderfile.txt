@@ -1,0 +1,24 @@
+# i = 0
+# with open('sample.csv', 'w') as file:
+#     fields = ['Image', 'Genre', 'Style']
+#     writer = csv.writer(file)
+#     writer.writerow(fields)
+#     for record in dataset:
+#         if(i > 100):
+#             break
+#         writer.writerow([record['image'], record['genre'], record['style']])
+#         i += 1
+# df = pd.read_csv('sample.csv')
+# print(df["Image"].head(2))
+# print(df["Image"][0].shape)
+
+# image_data = df["Image"][1:].to_numpy()
+# resized_image = []
+# for image in image_data:
+#     img = Image.open(image)
+#     img = Image.frombytes('RGB', img.size, image, 'raw')
+#     img = img.resize((32, 32))
+#     resized_image.append(img)
+# image_data = np.array(resized_image)
+# image_data = np.reshape(image_data, (-1, 32, 32, 3))
+# style_data = df["Style"][1:].to_numpy()
