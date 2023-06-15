@@ -1,15 +1,19 @@
 import csv
 import io
+import os
 import pathlib
 import sys
+from glob import glob
+from os import listdir
 
 import datasets
 import keras_tuner as kt
 import numpy as np
 import pandas as pd
 import PIL
-import tensorflow
+import tensorflow as tf
 from datasets import load_dataset
+from keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 from tensorflow import keras
 
@@ -17,10 +21,44 @@ from tensorflow import keras
 # data_dir = keras.utils.get_file("artwork_photos", origin = link_address, untar = True)
 # data_dir = pathlib.Path(data_dir)
 
-data_dir = "../../Data Files/archive"
+data_dir = "../../Data Files/archive1"
 # data_dir = pathlib.Path(data_dir)
 # realism_photos = list(data_dir.glob('Realism/*'))
 # PIL.Image.open(str(realism_photos[0]))
+
+# for dir in listdir(data_dir):
+#     print(dir)
+#     for file_name in listdir("{}/{}".format(data_dir, dir)):
+#         print(file_name)
+#         # if not file_name.endswith(".jpg"):
+#         #     file_path = os.path.join(data_dir, dir, file_name)
+#         #     print(file_path)
+
+def is_jpeg(file_path):
+    try:
+        image = Image.open(file_path)
+        return image.format == 'JPEG'
+    except (IOError, SyntaxError):
+        return False
+
+for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "Japanese_Art", "Neoclassicism", "Primitivism", "Realism", "Renaissance", "Rococo", "Romanticism", "Symbolism", "Western_Medieval"):
+    folder_path = os.path.join(data_dir, folder_name, folder_name)
+    for fname in os.listdir(folder_path):
+        fpath = os.path.join(folder_path, fname)
+        if not is_jpeg(fpath):
+            print(fpath)
+            os.remove(fpath)
+
+        # try:
+        #     fobj = open(fpath, "rb")
+        #     is_jfif = tf.compat.as_bytes("JPEG") in fobj.peek(10)
+        # finally:
+        #     fobj.close()
+
+        # if not is_jfif:
+        #     print("There is corrupted image!! :<<<<<")
+        #     # Delete corrupted image
+        #     # os.remove(fpath)
 
 train_dataset = keras.utils.image_dataset_from_directory(
     data_dir,
@@ -39,31 +77,60 @@ print("Classes' names:")
 print(class_names)
 number_of_styles = len(class_names)
 
-image_shape = None
-for image_batch, labels_batch in train_dataset:
-    image_shape = image_batch.shape[1:]
-    break
+# image_shape = None
+# shape_found = False
+# for image_batch, labels_batch in train_dataset:
+#     if(shape_found is False):
+#         image_shape = image_batch.shape[1:]
+#         shape_found = True
+# tensorflow.image.rgb_to_grayscale(image_batch)
+    # image = image_batch.numpy()
+    # image_batch = image.astype("float32") / (np.max(image))
+    # print("np min:")
+    # print(np.min(image_batch))
+    # print("np max:")
+    # print(np.max(image_batch))
+
+def preprocess_image(image, style):
+    # Check if the image is in grayscale
+    if image.shape[-1] == 1:
+        # Image is already grayscale, skip conversion
+        return image, style   
+    # Convert to grayscale if in RGB format
+    image = tf.image.rgb_to_grayscale(image)
+    # Resize the image to a fixed size
+    image = tf.image.resize(image, [224, 224])
+    # Normalize pixel values to the range [0, 1]
+    image = tf.cast(image, tf.float32) / 255.0
+    return image, style
+
+train_dataset = train_dataset.map(preprocess_image)
+validation_dataset = validation_dataset.map(preprocess_image)
+print("train dataset type")
+print(type(train_dataset))
 
 # write convolutional neural network model to classify styles of art
-def build_model(hp, input_shape = image_shape, num_classes = number_of_styles):
-    units = hp.Int('units', min_value = 32, max_value = 256, step = 16)
+def build_model(input_shape = (224, 224, 1), num_classes = number_of_styles):
+    # units = hp.Int('units', min_value = 64, max_value = 512, step = 32)
     
     model = keras.Sequential()
-    model.add(keras.layers.Rescaling(1./255, input_shape = image_shape))
+    model.add(keras.layers.Rescaling(1./255, input_shape = input_shape))
     model.add(keras.layers.Conv2D(32, 3, padding = "same", activation = 'relu')) # convolutional layer
     model.add(keras.layers.MaxPooling2D()) # pooling layer
     model.add(keras.layers.Conv2D(64, 3, padding = "same", activation = 'relu')) # convolutional layer
     model.add(keras.layers.MaxPooling2D()) # pooling layer
+    model.add(keras.layers.Conv2D(128, 3, padding = "same", activation = 'relu')) # convolutional layer
+    model.add(keras.layers.MaxPooling2D()) # pooling layer
     model.add(keras.layers.Flatten())
-    model.add(keras.layers.Dense(units = units, activation = 'relu'))
+    model.add(keras.layers.Dense(units = 32, activation = 'relu'))
     model.add(keras.layers.Dense(num_classes, activation='softmax'))
-    learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
-    model.compile(optimizer = keras.optimizers.Adam(learning_rate = learning_rate),
-                  loss = keras.losses.SparseCategoricalCrossentropy(from_logits = True),
+    # learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
+    model.compile(optimizer = keras.optimizers.Adam(learning_rate = 1e-3),
+                  loss = keras.losses.SparseCategoricalCrossentropy(),
                   metrics = ['accuracy'])
-    print("Summarize model")
+    print("Summarize model:")
     model.summary()
-    print("Return model")
+    print("Return model...")
     return model
 
 # data_list = []
@@ -86,30 +153,32 @@ def build_model(hp, input_shape = image_shape, num_classes = number_of_styles):
 # # sys.exit()
 # PIL.Image.open(str(image_data[0]))
 
-print("Start creating tuner and early stopping")
-tuner = kt.Hyperband(build_model,
-                     objective = 'val_accuracy',
-                     max_epochs = 10,
-                     directory = './',
-                     project_name = 'classification_tuner')
-early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
-print("Finish creating tuner and early stopping")
+# print("Start creating tuner and early stopping")
+# tuner = kt.Hyperband(build_model,
+#                      objective = 'val_accuracy',
+#                      max_epochs = 10,
+#                      directory = './',
+#                      project_name = 'classification_tuner')
+# early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
+# print("Finish creating tuner and early stopping")
 
-print("Start searching for optimal hyperparameters")
-tuner.search(train_dataset,
-             epochs = 10,
-             callbacks = [early_stopping])
-optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
-optimal_unit = optimal_hyperparams.get('units')
-optimal_learning_rate = optimal_hyperparams.get('learning_rate')
-print("The optimal parameters: optimal unit = {optimal_unit}, optimal learning rate = {optimal_learning_rate}")
-new_model = tuner.hypermodel.build(optimal_hyperparams)
-print("Finish searching for optimal hyperparameters")
+# print("Start searching for optimal hyperparameters")
+# tuner.search(train_dataset,
+#              epochs = 10,
+#              callbacks = [early_stopping])
+# optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
+# optimal_unit = optimal_hyperparams.get('units')
+# optimal_learning_rate = optimal_hyperparams.get('learning_rate')
+# print("The optimal parameters: optimal unit = {optimal_unit}, optimal learning rate = {optimal_learning_rate}")
+# new_model = tuner.hypermodel.build(optimal_hyperparams)
+# print("Finish searching for optimal hyperparameters")
+
+new_model = build_model()
 
 print("Start training the model")
 history = new_model.fit(train_dataset,
-                        validation_data = validation_dataset,
-                        epochs = 10)
+                        epochs = 10,
+                        validation_data = validation_dataset)
 print("Validation accuracy for each of the 10 epochs:")
 print(history.history['val_accuracy'])
 
