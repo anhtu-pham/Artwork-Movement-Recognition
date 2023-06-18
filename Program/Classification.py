@@ -1,18 +1,14 @@
-import csv
-import io
 import os
 import pathlib
 import sys
 from glob import glob
 from os import listdir
 
-import datasets
 import keras_tuner as kt
 import numpy as np
 import pandas as pd
 import PIL
 import tensorflow as tf
-from datasets import load_dataset
 from keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 from tensorflow import keras
@@ -26,14 +22,6 @@ print(data_dir)
 # data_dir = pathlib.Path(data_dir)
 # realism_photos = list(data_dir.glob('Realism/*'))
 # PIL.Image.open(str(realism_photos[0]))
-
-# for dir in listdir(data_dir):
-#     print(dir)
-#     for file_name in listdir("{}/{}".format(data_dir, dir)):
-#         print(file_name)
-#         # if not file_name.endswith(".jpg"):
-#         #     file_path = os.path.join(data_dir, dir, file_name)
-#         #     print(file_path)
 
 def is_jpeg(file_path):
     try:
@@ -49,9 +37,7 @@ for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "
         fpath = os.path.join(folder_path, fname)
         if not is_jpeg(fpath):
             print(fpath)
-            # os.remove(fpath)
-
-sys.exit()
+            os.remove(fpath)
 
 # for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "Japanese_Art", "Neoclassicism", "Primitivism", "Realism", "Renaissance", "Rococo", "Romanticism", "Symbolism", "Western_Medieval"):
 #     folder_path = os.path.join(data_dir, folder_name, folder_name)
@@ -61,26 +47,16 @@ sys.exit()
 #             print(fpath)
 #             os.remove(fpath)
 
-# Obsolete:
-        # try:
-        #     fobj = open(fpath, "rb")
-        #     is_jfif = tf.compat.as_bytes("JPEG") in fobj.peek(10)
-        # finally:
-        #     fobj.close()
-
-        # if not is_jfif:
-        #     print("There is corrupted image!! :<<<<<")
-        #     # Delete corrupted image
-        #     # os.remove(fpath)
+datasets_folder_path = os.path.join(data_dir, "../")
 
 train_dataset = keras.utils.image_dataset_from_directory(
-    data_dir,
+    directory = datasets_folder_path,
     validation_split = 0.2,
     subset = "training",
     seed = 123)
 
 validation_dataset = keras.utils.image_dataset_from_directory(
-    data_dir,
+    directory = datasets_folder_path,
     validation_split = 0.2,
     subset = "validation",
     seed = 123)
@@ -92,14 +68,14 @@ number_of_styles = len(class_names)
 
 image_shape = None
 for image_batch, labels_batch in train_dataset:
-    image_shape = image_batch.shape
+    image_shape = image_batch.shape[1:]
     break
 
 # def preprocess_image(image, style):
 #     # Check if the image is in grayscale
 #     if image.shape[-1] == 1:
 #         # Image is already grayscale, skip conversion
-#         return image, style   
+#         return image, style
 #     # Convert to grayscale if in RGB format
 #     image = tf.image.rgb_to_grayscale(image)
 #     # Resize the image to a fixed size
@@ -112,21 +88,18 @@ for image_batch, labels_batch in train_dataset:
 # validation_dataset = validation_dataset.map(preprocess_image)
 
 # write convolutional neural network model to classify styles of art
-def build_model(input_shape = image_shape, num_classes = number_of_styles):
-    # units = hp.Int('units', min_value = 64, max_value = 512, step = 32)
+def build_model(hp, input_shape = image_shape, num_classes = number_of_styles):
+    units = hp.Int('units', min_value = 64, max_value = 512, step = 32)
     
     model = keras.Sequential()
     model.add(keras.layers.Rescaling(1./255, input_shape = input_shape))
-    model.add(keras.layers.Conv2D(32, 3, padding = "same", activation = 'relu')) # convolutional layer
-    model.add(keras.layers.MaxPooling2D()) # pooling layer
-    model.add(keras.layers.Conv2D(64, 3, padding = "same", activation = 'relu')) # convolutional layer
-    model.add(keras.layers.MaxPooling2D()) # pooling layer
-    model.add(keras.layers.Conv2D(128, 3, padding = "same", activation = 'relu')) # convolutional layer
-    model.add(keras.layers.MaxPooling2D()) # pooling layer
+    for i in [32, 64, 128, 256]:
+        model.add(keras.layers.Conv2D(32, i, padding = "same", activation = 'relu')) # convolutional layer
+        model.add(keras.layers.MaxPooling2D()) # pooling layer
     model.add(keras.layers.Flatten())
     model.add(keras.layers.Dense(units = 32, activation = 'relu'))
     model.add(keras.layers.Dense(num_classes, activation='softmax'))
-    # learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
+    learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
     model.compile(optimizer = keras.optimizers.Adam(learning_rate = 1e-3),
                   loss = keras.losses.SparseCategoricalCrossentropy(),
                   metrics = ['accuracy'])
@@ -135,54 +108,34 @@ def build_model(input_shape = image_shape, num_classes = number_of_styles):
     print("Return model...")
     return model
 
-# data_list = []
-# dataset = load_dataset("huggan/wikiart", split = "train", streaming = True)
-# print("CHECK")
-# i = 0
-# for record in dataset:
-#     if(i > 1):
-#         break
-#     data_list.append(record)
-#     i += 1
-# image_data = [data_list[i]["image"] for i in range(len(data_list))]
-# style_data = [data_list[i]["style"] for i in range(len(data_list))]
-# print("Image data")
-# print(type(image_data))
-# # image_data = np.array(image_data, dtype = object)
-# # style_data = np.array(style_data, dtype = object)
-# # print(type(image_array))
-# print(type(image_data[0]))
-# # sys.exit()
-# PIL.Image.open(str(image_data[0]))
+print("Start creating tuner and early stopping")
+tuner = kt.Hyperband(build_model,
+                     objective = 'val_accuracy',
+                     max_epochs = 5,
+                     directory = './',
+                     project_name = 'classification_tuner')
+early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
+print("Finish creating tuner and early stopping")
 
-# print("Start creating tuner and early stopping")
-# tuner = kt.Hyperband(build_model,
-#                      objective = 'val_accuracy',
-#                      max_epochs = 10,
-#                      directory = './',
-#                      project_name = 'classification_tuner')
-# early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
-# print("Finish creating tuner and early stopping")
-
-# print("Start searching for optimal hyperparameters")
-# tuner.search(train_dataset,
-#              epochs = 10,
-#              callbacks = [early_stopping])
-# optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
-# optimal_unit = optimal_hyperparams.get('units')
-# optimal_learning_rate = optimal_hyperparams.get('learning_rate')
-# print("The optimal parameters: optimal unit = {optimal_unit}, optimal learning rate = {optimal_learning_rate}")
-# new_model = tuner.hypermodel.build(optimal_hyperparams)
-# print("Finish searching for optimal hyperparameters")
-
-new_model = build_model()
+print("Start searching for optimal hyperparameters")
+tuner.search(train_dataset,
+             epochs = 5,
+             callbacks = [early_stopping])
+optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
+optimal_unit = optimal_hyperparams.get('units')
+optimal_learning_rate = optimal_hyperparams.get('learning_rate')
+print("The optimal parameters: optimal unit = {}, optimal learning rate = {}".format(optimal_unit, optimal_learning_rate))
+new_model = tuner.hypermodel.build(optimal_hyperparams)
+print("Finish searching for optimal hyperparameters")
 
 print("Start training the model")
 history = new_model.fit(train_dataset,
-                        epochs = 10,
+                        epochs = 5,
                         validation_data = validation_dataset)
-print("Validation accuracy for each of the 10 epochs:")
-print(history.history['val_accuracy'])
+print("Accuracy for training data and validation data in each of the 5 epochs:")
+accuracy = history.history["accuracy"]
+val_accuracy = history.history["val_accuracy"]
+print("Accuracy for training data = {}, accuracy for validation data = {}".format(accuracy, val_accuracy))
 
 # loss, accuracy = model.evaluate(dataset["test"].features["image"], dataset["test"].features["style"])
 # print("Loss: {loss}. Accuracy: {accuracy}")
