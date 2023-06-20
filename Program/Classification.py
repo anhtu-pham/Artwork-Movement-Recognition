@@ -18,6 +18,8 @@ data_dir = keras.utils.get_file(origin = link_address, extract = True, cache_dir
 data_dir = pathlib.Path(data_dir)
 print(data_dir)
 
+max_size = 89478485
+
 # data_dir = "../../Data Files/archive1"
 # data_dir = pathlib.Path(data_dir)
 # realism_photos = list(data_dir.glob('Realism/*'))
@@ -28,6 +30,16 @@ def is_jpeg(file_path):
         image = Image.open(file_path)
         return image.format == 'JPEG'
     except (IOError, SyntaxError):
+        print("Unexpected error")
+        return True
+
+def exceed_max_size(file_path):
+    try:
+        image = Image.open(file_path)
+        width, height = image.size
+        return width * height > max_size
+    except (IOError, SyntaxError):
+        print("Unexpected error")
         return False
 
 for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "Japanese_Art", "Neoclassicism", "Primitivism", "Realism", "Renaissance", "Rococo", "Romanticism", "Symbolism", "Western_Medieval"):
@@ -35,8 +47,11 @@ for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "
     print(folder_path)
     for fname in os.listdir(folder_path):
         fpath = os.path.join(folder_path, fname)
+        if exceed_max_size(fpath):
+            print("Exceed max size: {}".format(fpath))
+            os.remove(fpath)
         if not is_jpeg(fpath):
-            print(fpath)
+            print("Not jpeg: {}".format(fpath))
             os.remove(fpath)
 
 # for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "Japanese_Art", "Neoclassicism", "Primitivism", "Realism", "Renaissance", "Rococo", "Romanticism", "Symbolism", "Western_Medieval"):
@@ -51,12 +66,14 @@ datasets_folder_path = os.path.join(data_dir, "../")
 
 train_dataset = keras.utils.image_dataset_from_directory(
     directory = datasets_folder_path,
+    batch_size = 5,
     validation_split = 0.2,
     subset = "training",
     seed = 123)
 
 validation_dataset = keras.utils.image_dataset_from_directory(
     directory = datasets_folder_path,
+    batch_size = 5,
     validation_split = 0.2,
     subset = "validation",
     seed = 123)
@@ -88,18 +105,19 @@ for image_batch, labels_batch in train_dataset:
 # validation_dataset = validation_dataset.map(preprocess_image)
 
 # write convolutional neural network model to classify styles of art
-def build_model(hp, input_shape = image_shape, num_classes = number_of_styles):
-    units = hp.Int('units', min_value = 64, max_value = 512, step = 32)
+def build_model(input_shape = image_shape, num_classes = number_of_styles):
+    # units = hp.Int('units', min_value = 64, max_value = 512, step = 32)
     
     model = keras.Sequential()
     model.add(keras.layers.Rescaling(1./255, input_shape = input_shape))
     for i in [32, 64, 128, 256]:
         model.add(keras.layers.Conv2D(32, i, padding = "same", activation = 'relu')) # convolutional layer
+        model.add(keras.layers.BatchNormalization()) # batch normalization layer
         model.add(keras.layers.MaxPooling2D()) # pooling layer
     model.add(keras.layers.Flatten())
-    model.add(keras.layers.Dense(units = 32, activation = 'relu'))
+    model.add(keras.layers.Dense(units = 64, activation = 'relu'))
     model.add(keras.layers.Dense(num_classes, activation='softmax'))
-    learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
+    # learning_rate = hp.Choice('learning_rate', values = [1e-2, 1e-3])
     model.compile(optimizer = keras.optimizers.Adam(learning_rate = 1e-3),
                   loss = keras.losses.SparseCategoricalCrossentropy(),
                   metrics = ['accuracy'])
@@ -108,25 +126,27 @@ def build_model(hp, input_shape = image_shape, num_classes = number_of_styles):
     print("Return model...")
     return model
 
-print("Start creating tuner and early stopping")
-tuner = kt.Hyperband(build_model,
-                     objective = 'val_accuracy',
-                     max_epochs = 5,
-                     directory = './',
-                     project_name = 'classification_tuner')
-early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
-print("Finish creating tuner and early stopping")
+# print("Start creating tuner and early stopping")
+# tuner = kt.Hyperband(build_model,
+#                      objective = 'val_accuracy',
+#                      max_epochs = 5,
+#                      directory = './',
+#                      project_name = 'classification_tuner')
+# early_stopping = keras.callbacks.EarlyStopping(monitor = 'val_loss', patience = 8)
+# print("Finish creating tuner and early stopping")
 
-print("Start searching for optimal hyperparameters")
-tuner.search(train_dataset,
-             epochs = 5,
-             callbacks = [early_stopping])
-optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
-optimal_unit = optimal_hyperparams.get('units')
-optimal_learning_rate = optimal_hyperparams.get('learning_rate')
-print("The optimal parameters: optimal unit = {}, optimal learning rate = {}".format(optimal_unit, optimal_learning_rate))
-new_model = tuner.hypermodel.build(optimal_hyperparams)
-print("Finish searching for optimal hyperparameters")
+# print("Start searching for optimal hyperparameters")
+# tuner.search(train_dataset,
+#              epochs = 5,
+#              callbacks = [early_stopping])
+# optimal_hyperparams = tuner.get_best_hyperparameters(num_trials = 1)[0]
+# optimal_unit = optimal_hyperparams.get('units')
+# optimal_learning_rate = optimal_hyperparams.get('learning_rate')
+# print("The optimal parameters: optimal unit = {}, optimal learning rate = {}".format(optimal_unit, optimal_learning_rate))
+# new_model = tuner.hypermodel.build(optimal_hyperparams)
+# print("Finish searching for optimal hyperparameters")
+
+new_model = build_model()
 
 print("Start training the model")
 history = new_model.fit(train_dataset,
