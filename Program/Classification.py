@@ -17,7 +17,7 @@ link_address = "https://storage.googleapis.com/kaggle-data-sets/2779739/4804396/
 data_dir = keras.utils.get_file(origin = link_address, extract = True, cache_dir = "./")
 data_dir = pathlib.Path(data_dir)
 print(data_dir)
-
+datasets_folder_path = os.path.join(data_dir, "../")
 max_size = 89478485
 
 # data_dir = "../../Data Files/archive1"
@@ -31,24 +31,24 @@ def is_jpeg(file_path):
         return image.format == 'JPEG'
     except (IOError, SyntaxError):
         print("Unexpected error")
-        return True
+        return False
 
-def exceed_max_size(file_path):
+def max_size_exceeded_or_error(file_path):
     try:
         image = Image.open(file_path)
         width, height = image.size
         return width * height > max_size
     except (IOError, SyntaxError):
         print("Unexpected error")
-        return False
+        return True
 
 for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "Japanese_Art", "Neoclassicism", "Primitivism", "Realism", "Renaissance", "Rococo", "Romanticism", "Symbolism", "Western_Medieval"):
-    folder_path = os.path.join(data_dir, "../", folder_name, folder_name)
+    folder_path = os.path.join(datasets_folder_path, folder_name, folder_name)
     print(folder_path)
     for fname in os.listdir(folder_path):
         fpath = os.path.join(folder_path, fname)
-        if exceed_max_size(fpath):
-            print("Exceed max size: {}".format(fpath))
+        if max_size_exceeded_or_error(fpath):
+            print("Exceed max size or cause error: {}".format(fpath))
             os.remove(fpath)
         if not is_jpeg(fpath):
             print("Not jpeg: {}".format(fpath))
@@ -61,8 +61,6 @@ for folder_name in ("Academic_Art", "Art_Nouveau", "Baroque", "Expressionism", "
 #         if not is_jpeg(fpath):
 #             print(fpath)
 #             os.remove(fpath)
-
-datasets_folder_path = os.path.join(data_dir, "../")
 
 train_dataset = keras.utils.image_dataset_from_directory(
     directory = datasets_folder_path,
@@ -79,8 +77,7 @@ validation_dataset = keras.utils.image_dataset_from_directory(
     seed = 123)
 
 class_names = train_dataset.class_names
-print("Classes' names:")
-print(class_names)
+print("Classes' names: {}".format(class_names))
 number_of_styles = len(class_names)
 
 image_shape = None
@@ -156,6 +153,3 @@ print("Accuracy for training data and validation data in each of the 5 epochs:")
 accuracy = history.history["accuracy"]
 val_accuracy = history.history["val_accuracy"]
 print("Accuracy for training data = {}, accuracy for validation data = {}".format(accuracy, val_accuracy))
-
-# loss, accuracy = model.evaluate(dataset["test"].features["image"], dataset["test"].features["style"])
-# print("Loss: {loss}. Accuracy: {accuracy}")
