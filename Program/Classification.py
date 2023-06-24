@@ -5,12 +5,8 @@ from glob import glob
 from os import listdir
 
 import keras_tuner as kt
-import numpy as np
 import pandas as pd
-import PIL
 import tensorflow as tf
-from keras.preprocessing.image import ImageDataGenerator
-from PIL import Image
 from tensorflow import keras
 
 link_address = "https://storage.googleapis.com/kaggle-data-sets/2779739/4804396/bundle/archive.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20230613%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20230613T161356Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=8f2db3da18017760aca09cbf043e89494a39c28c016784df584061898b4f4854b7fd9ae8f8ec7a36e113a1efd3cd30186c6fa96a253294829efbcd00c184e8b96b3d0acb9cf5e260944d2337689c62bc771a18ea28fd3bed4a3fcafcf38f70a8d179f280e8eb95e8c10aac90ee0b286af6cb8388560d2fc923a680485452994200ee4439f354bc00f363a55e69cfb3ff3a3634358435336182b4e4d6154e196b002ed4d1563fd9b17a1c06fcbcb3b0878a3a2e613365d4577b4bc0c3df9cf9e16d3df0e95a46c800850413cbf59c9d81120270fff9d613d0b594abada030ad54e5315a83e32ee1fa452cb7cbd3d827a9d8297c70e89e4656b2b1f5442f0c84d1"
